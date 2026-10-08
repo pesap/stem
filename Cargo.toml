@@ -11,7 +11,6 @@ include = ["Cargo.toml", "Cargo.lock", "README.md", "src/**", "templates/**", "e
 
 [package.metadata.dist]
 dist = true
-npm-package = "stem-cli"
 
 [dependencies]
 anyhow = "1.0"

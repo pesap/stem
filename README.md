@@ -102,20 +102,20 @@ Add `templates/<id>.jl.j2` and a complete `examples/<id>.toml` configuration. Th
 
 ## Install and run
 
-After the first release, Node.js and npm will be enough to run the prebuilt CLI. The `stem-cli` npm package downloads the matching binary from GitHub Releases. Rust is not required:
+After the first GitHub Release, run STEM directly from this repository with Node.js and npm. Rust and an npm account are not required:
 
 ```bash
-npx --yes stem-cli --help
-npx --yes stem-cli -i /path/to/system.json -o /tmp/run.jl
+npx --yes pesap/stem --help
+npx --yes pesap/stem -i /path/to/system.json -o /tmp/run.jl
 ```
 
-For a persistent installation, use `npm install --global stem-cli` and then run `stem`.
+For a persistent installation, use `npm install --global github:pesap/stem` and then run `stem`.
 
 The Rust crate is not published to crates.io. To build from source, install Rust and run `cargo build --release`.
 
 ## Checks and releases
 
-CI uses stable Rust and runs formatting, all-target/all-feature Clippy with pedantic lints denied, the test suite, and non-interactive CLI generation for both built-in templates. Run the checks locally with:
+CI uses stable Rust and runs formatting, all-target/all-feature Clippy with pedantic lints denied, the test suite, non-interactive CLI generation for both built-in templates, and checks the GitHub `npx` package. Run the Rust checks locally with:
 
 ```bash
 mise run fmt-check
@@ -124,4 +124,4 @@ mise run test
 mise run build
 ```
 
-cargo-dist builds platform binaries for GitHub Releases and publishes the generated npm installer package only. Release a version by pushing a matching `vX.Y.Z` tag. Before the first release, configure an npm access token as the GitHub Actions secret `NPM_TOKEN`.
+cargo-dist builds platform binaries and an npm installer asset for GitHub Releases. The checked-in private npm package lets npm run the CLI from this GitHub repository and downloads the matching release binary. Neither crates.io nor the npm registry receives a publish. Release a version by pushing a matching `vX.Y.Z` tag.

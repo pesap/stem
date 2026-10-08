@@ -1,0 +1,81 @@
+{
+  "artifactDownloadUrls": [
+    "https://github.com/pesap/stem/releases/latest/download"
+  ],
+  "private": true,
+  "files": ["run-stem.js", "binary.js", "binary-install.js", "install.js"],
+  "bin": {
+    "stem": "run-stem.js"
+  },
+  "dependencies": {
+    "detect-libc": "^2.1.2"
+  },
+  "description": "Generate Sienna PowerSimulations Julia scripts from configuration files",
+  "engines": {
+    "node": ">=14.14",
+    "npm": ">=6"
+  },
+  "glibcMinimum": {
+    "major": 2,
+    "series": 31
+  },
+  "homepage": "https://github.com/pesap/stem",
+  "name": "stem",
+  "preferUnplugged": true,
+  "repository": "https://github.com/pesap/stem",
+  "scripts": {
+    "postinstall": "node ./install.js"
+  },
+  "supportedPlatforms": {
+    "aarch64-apple-darwin": {
+      "artifactName": "stem-aarch64-apple-darwin.tar.xz",
+      "bins": {
+        "stem": "stem"
+      },
+      "zipExt": ".tar.xz"
+    },
+    "aarch64-pc-windows-msvc": {
+      "artifactName": "stem-x86_64-pc-windows-msvc.zip",
+      "bins": {
+        "stem": "stem.exe"
+      },
+      "zipExt": ".zip"
+    },
+    "aarch64-unknown-linux-gnu": {
+      "artifactName": "stem-aarch64-unknown-linux-gnu.tar.xz",
+      "bins": {
+        "stem": "stem"
+      },
+      "zipExt": ".tar.xz"
+    },
+    "x86_64-apple-darwin": {
+      "artifactName": "stem-x86_64-apple-darwin.tar.xz",
+      "bins": {
+        "stem": "stem"
+      },
+      "zipExt": ".tar.xz"
+    },
+    "x86_64-pc-windows-gnu": {
+      "artifactName": "stem-x86_64-pc-windows-msvc.zip",
+      "bins": {
+        "stem": "stem.exe"
+      },
+      "zipExt": ".zip"
+    },
+    "x86_64-pc-windows-msvc": {
+      "artifactName": "stem-x86_64-pc-windows-msvc.zip",
+      "bins": {
+        "stem": "stem.exe"
+      },
+      "zipExt": ".zip"
+    },
+    "x86_64-unknown-linux-gnu": {
+      "artifactName": "stem-x86_64-unknown-linux-gnu.tar.xz",
+      "bins": {
+        "stem": "stem"
+      },
+      "zipExt": ".tar.xz"
+    }
+  },
+  "version": "0.1.0"
+}

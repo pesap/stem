@@ -42,6 +42,32 @@ jobs:
       - name: Build CLI
         run: cargo build --locked
 
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "22"
+
+      - name: Check GitHub npx package
+        run: |
+          node --check run-stem.js
+          node --check binary.js
+          node --check binary-install.js
+          node --check install.js
+          npm pack --dry-run
+
+      - name: Smoke-test npx launcher
+        shell: bash
+        run: |
+          set -euo pipefail
+          test_dir="$(mktemp -d "$RUNNER_TEMP/stem-npx.XXXXXX")"
+          tarball="$(npm pack --pack-destination "$test_dir" --silent)"
+          npm install --prefix "$test_dir" --ignore-scripts --no-save "$test_dir/$tarball"
+          package_dir="$test_dir/node_modules/stem"
+          mkdir -p "$package_dir/node_modules/.bin_real"
+          printf '%s\n' '#!/bin/sh' 'printf "ARGS:%s\\n" "$*"' > "$package_dir/node_modules/.bin_real/stem"
+          chmod +x "$package_dir/node_modules/.bin_real/stem"
+          output="$(npm exec --prefix "$test_dir" -- stem --probe forwarded)"
+          test "$output" = "ARGS:--probe forwarded"
+
       - name: Smoke-test CLI
         shell: bash
         run: |
