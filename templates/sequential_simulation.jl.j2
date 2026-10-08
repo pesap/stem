@@ -1,0 +1,132 @@
+#!/usr/bin/env julia
+
+{% set selected_solver = solver.backends[solver.selected] %}
+using Dates
+using PowerSystems
+using PowerSimulations
+import PowerSimulations as PSI
+using {{ selected_solver.package }}
+{% for package in julia.imports %}using {{ package }}
+{% endfor %}
+
+const SIMULATION_NAME = {{ simulation.name|tojson }}
+const INITIAL_TIME = DateTime({{ simulation.initial_time|tojson }})
+const STEPS = {{ simulation.steps }}
+const SIMULATION_FOLDER = {{ simulation.output_dir|tojson }}
+const REPORT_PATH = {{ report.path|tojson }}
+const REPORT_VARIABLES = Dict(
+{% for stage in report.variables %}    {{ stage|tojson }} => {{ report.variables[stage]|tojson }},
+{% endfor %})
+const STAGE_NAMES = [
+{% for stage in stages %}    {{ stage.name|tojson }},
+{% endfor %}]
+
+function write_report(path, results)
+    mkpath(dirname(path))
+    open(path, "w") do io
+        println(io, "Simulation: ", SIMULATION_NAME)
+        println(io, "Initial time: ", INITIAL_TIME)
+        println(io, "Steps: ", STEPS)
+
+        for stage_name in STAGE_NAMES
+            stage_results = get_decision_problem_results(results, stage_name)
+            variable_names = get(REPORT_VARIABLES, stage_name, String[])
+            println(io, "\nStage: ", stage_name)
+            println(io, "Available variables: ", join(list_variable_names(stage_results), ", "))
+
+            realized = read_realized_variables(stage_results, variable_names)
+            for variable_name in variable_names
+                println(io, "\n", variable_name)
+                for (timestamp, frame) in realized[variable_name]
+                    println(io, timestamp)
+                    show(io, MIME("text/plain"), frame)
+                    println(io)
+                end
+            end
+        end
+    end
+    return nothing
+end
+
+function main()
+    solver = optimizer_with_attributes(
+        {{ selected_solver.optimizer }}{% for key in solver.attributes %},
+        {{ key|tojson }} => {{ solver.attributes[key]|tojson }}{% endfor %},
+    )
+{% for stage in stages %}{% set stage_index = loop.index %}    system_{{ stage_index }} = System({{ stage.system_path|tojson }})
+    transform_single_time_series!(system_{{ stage_index }}, {{ stage.forecast_horizon }}, {{ stage.forecast_interval }})
+
+    template_{{ stage_index }} = ProblemTemplate()
+{% for device in stage.device_models %}{% set attributes = device.attributes|default({}) %}{% set kwargs = device.kwargs|default([]) %}{% if device.use_slacks is defined or attributes or kwargs %}    set_device_model!(
+        template_{{ stage_index }},
+        DeviceModel(
+            {{ device.component }},
+            {{ device.formulation }};
+{% if device.use_slacks is defined %}            use_slacks = {{ device.use_slacks|tojson }},
+{% endif %}{% if attributes %}            attributes = Dict{String, Any}(
+{% for key in attributes %}                {{ key|tojson }} => {{ attributes[key]|tojson }},
+{% endfor %}            ),
+{% endif %}{% for kwarg in kwargs %}            {{ kwarg }},
+{% endfor %}        ),
+    )
+{% else %}    set_device_model!(template_{{ stage_index }}, {{ device.component }}, {{ device.formulation }})
+{% endif %}{% endfor %}{% for service in stage.service_models %}    set_service_model!(template_{{ stage_index }}, {{ service.component }}, {{ service.formulation }})
+{% endfor %}    set_network_model!(
+        template_{{ stage_index }},
+        NetworkModel({{ stage.network.formulation }}{% if stage.network.options %}; {{ stage.network.options|join(", ") }}{% endif %}),
+    )
+{% endfor %}
+    models = SimulationModels(;
+        decision_models = [
+{% for stage in stages %}            DecisionModel(
+                template_{{ loop.index }},
+                system_{{ loop.index }};
+                name = {{ stage.name|tojson }},
+                optimizer = solver,
+                resolution = {{ stage.resolution }},
+            ),
+{% endfor %}        ],
+    )
+    feedforwards = Dict(
+{% for model in feedforwards %}        {{ model|tojson }} => [
+{% for entry in feedforwards[model] %}            SemiContinuousFeedforward(;
+                component_type = {{ entry.component_type }},
+                source = {{ entry.source }},
+                affected_values = [
+{% for value in entry.affected_values %}                    {{ value }},
+{% endfor %}                ],
+            ),
+{% endfor %}        ],
+{% endfor %}    )
+    sequence = SimulationSequence(;
+        models = models,
+        ini_cond_chronology = InterProblemChronology(),
+        feedforwards = feedforwards,
+    )
+    simulation = Simulation(;
+        name = SIMULATION_NAME,
+        steps = STEPS,
+        models = models,
+        sequence = sequence,
+        initial_time = INITIAL_TIME,
+        simulation_folder = SIMULATION_FOLDER,
+    )
+
+    mkpath(SIMULATION_FOLDER)
+    build_status = build!(simulation)
+    if build_status != PSI.SimulationBuildStatus.BUILT
+        error("Simulation build failed: $(build_status)")
+    end
+
+    run_status = execute!(simulation; enable_progress_bar = false)
+    if run_status != PSI.RunStatus.SUCCESSFULLY_FINALIZED
+        error("Simulation execution failed: $(run_status)")
+    end
+
+    write_report(REPORT_PATH, SimulationResults(simulation))
+    return nothing
+end
+
+if abspath(PROGRAM_FILE) == abspath(@__FILE__)
+    main()
+end

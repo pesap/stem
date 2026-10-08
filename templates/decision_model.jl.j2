@@ -1,0 +1,87 @@
+#!/usr/bin/env julia
+
+{% set device_options = formulations.device_options|default({}) %}
+{% set selected_solver = solver.backends[solver.selected] %}
+using Dates
+using PowerSystems
+using PowerSimulations
+import PowerSimulations as PSI
+using {{ selected_solver.package }}
+{% for package in formulations.imports|default([]) %}using {{ package }}
+{% endfor %}
+
+const SYSTEM_PATH = {{ system_path|tojson }}
+const SCENARIO_NAME = {{ scenario.name|tojson }}
+const INITIAL_TIME = DateTime({{ scenario.initial_time|tojson }})
+const SIMULATION_NAME = {{ simulation.name|tojson }}
+const OUTPUT_DIR = {{ simulation.output_dir|tojson }}
+const REPORT_PATH = {{ report.path|tojson }}
+const REPORT_VARIABLES = {{ report.variables|tojson }}
+
+function write_report(path, results)
+    mkpath(dirname(path))
+    open(path, "w") do io
+        println(io, "Scenario: ", SCENARIO_NAME)
+        println(io, "Initial time: ", INITIAL_TIME)
+        println(io, "Objective value: ", get_objective_value(results))
+        println(io, "Optimizer statistics:")
+        show(io, MIME("text/plain"), get_optimizer_stats(results))
+        println(io, "\nSelected variables:")
+        for name in REPORT_VARIABLES
+            println(io, "\n", name)
+            show(io, MIME("text/plain"), read_variable(results, name))
+            println(io)
+        end
+    end
+    return nothing
+end
+
+function main()
+    system = System(SYSTEM_PATH)
+    template = ProblemTemplate()
+{% for component in formulations.device_models %}{% set formulation = formulations.device_models[component] %}{% set component_options = device_options[component]|default({}) %}{% set model_options = component_options[formulation]|default({}) %}{% set attributes = model_options.attributes|default({}) %}{% set kwargs = model_options.kwargs|default([]) %}{% if model_options.use_slacks is defined or attributes or kwargs %}    set_device_model!(
+        template,
+        DeviceModel(
+            {{ component }},
+            {{ formulation }};
+{% if model_options.use_slacks is defined %}            use_slacks = {{ model_options.use_slacks|tojson }},
+{% endif %}{% if attributes %}            attributes = Dict{String, Any}(
+{% for key in attributes %}                {{ key|tojson }} => {{ attributes[key]|tojson }},
+{% endfor %}            ),
+{% endif %}{% for kwarg in kwargs %}            {{ kwarg }},
+{% endfor %}        ),
+    )
+{% else %}    set_device_model!(template, {{ component }}, {{ formulation }})
+{% endif %}{% endfor %}{% for component in formulations.service_models %}    set_service_model!(template, {{ component }}, {{ formulations.service_models[component] }})
+{% endfor %}    set_network_model!(
+        template,
+        NetworkModel({{ formulations.network.formulation }}{% if formulations.network.options %}; {{ formulations.network.options|join(", ") }}{% endif %}),
+    )
+
+    solver = optimizer_with_attributes(
+        {{ selected_solver.optimizer }}{% for key in solver.attributes %},
+        {{ key|tojson }} => {{ solver.attributes[key]|tojson }}{% endfor %},
+    )
+    problem = DecisionModel(
+        template,
+        system;
+        name = SIMULATION_NAME,
+        optimizer = solver,
+        initial_time = INITIAL_TIME,
+        horizon = {{ timing.horizon }},
+        resolution = {{ timing.resolution }},
+    )
+
+    mkpath(OUTPUT_DIR)
+    build!(problem; output_dir = OUTPUT_DIR)
+    solve_status = solve!(problem)
+    if solve_status != PSI.RunStatus.SUCCESSFULLY_FINALIZED
+        error("Decision model solve failed: $(solve_status)")
+    end
+    write_report(REPORT_PATH, OptimizationProblemResults(problem))
+    return nothing
+end
+
+if abspath(PROGRAM_FILE) == abspath(@__FILE__)
+    main()
+end

@@ -1,0 +1,116 @@
+system_path = ""
+
+[stem]
+template = "decision_model"
+name = "DecisionModel"
+
+[scenario]
+name = "winter-day"
+initial_time = "2020-01-01T00:00:00"
+
+[simulation]
+name = "single-step-dispatch"
+output_dir = "results/single-step-dispatch"
+
+[timing]
+horizon = "P1D"
+resolution = "PT1H"
+
+[solver]
+selected = "HiGHS"
+attributes = { mip_rel_gap = 0.5, log_to_console = false }
+
+[solver.backends.HiGHS]
+package = "HiGHS"
+optimizer = "HiGHS.Optimizer"
+description = "Open-source linear and mixed-integer optimization solver"
+
+[report]
+path = "results/single-step-dispatch/report.txt"
+variables = [
+    "ActivePowerVariable__ThermalStandard",
+    "ActivePowerVariable__RenewableDispatch",
+    "ActivePowerVariable__HydroDispatch",
+]
+
+[formulations]
+imports = ["HydroPowerSimulations"]
+
+[formulations.network]
+formulation = "CopperPlatePowerModel"
+options = []
+
+[formulations.network.choices]
+CopperPlatePowerModel = "Single-bus model without transmission constraints"
+PTDFPowerModel = "Linear transmission model using PTDFs"
+AreaBalancePowerModel = "Area-level balance model; requires system areas"
+AreaPTDFPowerModel = "PTDF model with balancing areas; requires system areas"
+DCPPowerModel = "Linear DC power flow approximation"
+
+[formulations.device_models]
+Line = "StaticBranch"
+Transformer2W = "StaticBranch"
+TapTransformer = "StaticBranch"
+ThermalStandard = "ThermalStandardUnitCommitment"
+RenewableDispatch = "RenewableFullDispatch"
+PowerLoad = "StaticPowerLoad"
+HydroDispatch = "HydroDispatchRunOfRiver"
+RenewableNonDispatch = "FixedOutput"
+
+[formulations.service_models]
+"VariableReserve{ReserveUp}" = "RangeReserve"
+"VariableReserve{ReserveDown}" = "RangeReserve"
+
+[formulations.device_options.Line.StaticBranch]
+description = "Standard branch formulation"
+use_slacks = false
+
+[formulations.device_options.Line.StaticBranchUnbounded]
+description = "Branch formulation without thermal limits"
+use_slacks = false
+
+[formulations.device_options.Transformer2W.StaticBranch]
+description = "Standard two-winding transformer formulation"
+use_slacks = false
+
+[formulations.device_options.Transformer2W.StaticBranchUnbounded]
+description = "Two-winding transformer without thermal limits"
+use_slacks = false
+
+[formulations.device_options.TapTransformer.StaticBranch]
+description = "Standard tap-transformer formulation"
+use_slacks = false
+
+[formulations.device_options.TapTransformer.StaticBranchUnbounded]
+description = "Tap-transformer without thermal limits"
+use_slacks = false
+
+[formulations.device_options.ThermalStandard.ThermalStandardUnitCommitment]
+description = "Thermal unit commitment with startup and shutdown decisions"
+use_slacks = false
+
+[formulations.device_options.ThermalStandard.ThermalBasicUnitCommitment]
+description = "Basic thermal unit commitment"
+use_slacks = false
+
+[formulations.device_options.RenewableDispatch.RenewableFullDispatch]
+description = "Dispatchable renewable output"
+
+[formulations.device_options.RenewableDispatch.RenewableConstantPowerFactor]
+description = "Renewable dispatch at constant power factor"
+
+[formulations.device_options.PowerLoad.StaticPowerLoad]
+description = "Fixed active and reactive load"
+
+[formulations.device_options.HydroDispatch.HydroDispatchRunOfRiver]
+description = "Run-of-river hydro dispatch"
+
+[formulations.device_options.HydroDispatch.HydroCommitmentRunOfRiver]
+description = "Run-of-river hydro unit commitment"
+
+[formulations.device_options.RenewableNonDispatch.FixedOutput]
+description = "Fixed non-dispatchable renewable output"
+
+[formulations.device_options.EnergyReservoirStorage.StorageDispatchWithReserves]
+description = "Storage dispatch with reserve provision"
+use_slacks = false

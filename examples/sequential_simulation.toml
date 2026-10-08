@@ -1,0 +1,141 @@
+[stem]
+template = "sequential_simulation"
+name = "Sequential Simulation"
+
+[simulation]
+name = "day-ahead-real-time"
+initial_time = "2020-01-01T00:00:00"
+steps = 2
+output_dir = "results/day-ahead-real-time"
+
+[solver]
+selected = "HiGHS"
+attributes = { mip_rel_gap = 0.5, log_to_console = false }
+
+[solver.backends.HiGHS]
+package = "HiGHS"
+optimizer = "HiGHS.Optimizer"
+description = "Open-source linear and mixed-integer optimization solver"
+
+[julia]
+imports = ["HydroPowerSimulations"]
+
+[feedforwards]
+ED = [
+    { component_type = "ThermalStandard", source = "OnVariable", affected_values = ["ActivePowerVariable"] },
+]
+
+[report]
+path = "results/day-ahead-real-time/report.txt"
+
+[report.variables]
+UC = [
+    "ActivePowerVariable__ThermalStandard",
+    "ActivePowerVariable__RenewableDispatch",
+]
+ED = [
+    "ActivePowerVariable__ThermalStandard",
+    "ActivePowerVariable__RenewableDispatch",
+]
+
+[[stages]]
+name = "UC"
+system_path = "/path/to/scenario/day-ahead-system.json"
+forecast_horizon = "P2D"
+forecast_interval = "P1D"
+resolution = "PT1H"
+
+[stages.network]
+formulation = "CopperPlatePowerModel"
+options = []
+
+[stages.network.choices]
+CopperPlatePowerModel = "Single-bus model without transmission constraints"
+PTDFPowerModel = "Linear transmission model using PTDFs"
+AreaBalancePowerModel = "Area-level balance model; requires system areas"
+AreaPTDFPowerModel = "PTDF model with balancing areas; requires system areas"
+DCPPowerModel = "Linear DC power flow approximation"
+
+[[stages.device_models]]
+component = "ThermalStandard"
+formulation = "ThermalStandardUnitCommitment"
+attributes = {}
+
+[[stages.device_models]]
+component = "RenewableDispatch"
+formulation = "RenewableFullDispatch"
+attributes = {}
+
+[[stages.device_models]]
+component = "PowerLoad"
+formulation = "StaticPowerLoad"
+attributes = {}
+
+[[stages.device_models]]
+component = "HydroDispatch"
+formulation = "HydroDispatchRunOfRiver"
+attributes = {}
+
+[[stages.device_models]]
+component = "RenewableNonDispatch"
+formulation = "FixedOutput"
+attributes = {}
+
+[[stages.service_models]]
+component = "VariableReserve{ReserveUp}"
+formulation = "RangeReserve"
+
+[[stages.service_models]]
+component = "VariableReserve{ReserveDown}"
+formulation = "RangeReserve"
+
+[[stages]]
+name = "ED"
+system_path = "/path/to/scenario/real-time-system.json"
+forecast_horizon = "PT1H"
+forecast_interval = "PT15M"
+resolution = "PT5M"
+
+[stages.network]
+formulation = "PTDFPowerModel"
+options = ["use_slacks = true"]
+
+[stages.network.choices]
+CopperPlatePowerModel = "Single-bus model without transmission constraints"
+PTDFPowerModel = "Linear transmission model using PTDFs"
+AreaBalancePowerModel = "Area-level balance model; requires system areas"
+AreaPTDFPowerModel = "PTDF model with balancing areas; requires system areas"
+DCPPowerModel = "Linear DC power flow approximation"
+
+[[stages.device_models]]
+component = "ThermalStandard"
+formulation = "ThermalBasicDispatch"
+attributes = {}
+
+[[stages.device_models]]
+component = "RenewableDispatch"
+formulation = "RenewableFullDispatch"
+attributes = {}
+
+[[stages.device_models]]
+component = "PowerLoad"
+formulation = "StaticPowerLoad"
+attributes = {}
+
+[[stages.device_models]]
+component = "HydroDispatch"
+formulation = "HydroDispatchRunOfRiver"
+attributes = {}
+
+[[stages.device_models]]
+component = "RenewableNonDispatch"
+formulation = "FixedOutput"
+attributes = {}
+
+[[stages.service_models]]
+component = "VariableReserve{ReserveUp}"
+formulation = "RangeReserve"
+
+[[stages.service_models]]
+component = "VariableReserve{ReserveDown}"
+formulation = "RangeReserve"

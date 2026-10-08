@@ -1,0 +1,33 @@
+[package]
+name = "stem"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+description = "Generate Sienna PowerSimulations Julia scripts from configuration files"
+repository = "https://github.com/pesap/stem"
+homepage = "https://github.com/pesap/stem"
+publish = false
+include = ["Cargo.toml", "Cargo.lock", "README.md", "src/**", "templates/**", "examples/**"]
+
+[package.metadata.dist]
+dist = true
+npm-package = "stem-cli"
+
+[dependencies]
+anyhow = "1.0"
+clap = { version = "4.5", features = ["derive"] }
+cliclack = "0.5.6"
+include_dir = "0.7.4"
+minijinja = { version = "2.24", features = ["json"] }
+serde_json = "1.0"
+toml = "0.8"
+ureq = { version = "3.4.2", default-features = false, features = ["rustls"] }
+
+[lints.clippy]
+all = "warn"
+pedantic = "warn"
+
+[profile.dist]
+inherits = "release"
+lto = "thin"
+

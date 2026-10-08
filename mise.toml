@@ -1,0 +1,34 @@
+[tools]
+cargo-dist = "0.33.0"
+
+[tasks.fmt-check]
+description = "Check Rust formatting"
+run = "cargo fmt --all -- --check"
+
+[tasks.clippy]
+description = "Run strict Clippy checks, including pedantic lints"
+run = "cargo clippy --locked --all-targets --all-features -- -W clippy::pedantic -D warnings"
+
+[tasks.test]
+description = "Run STEM tests"
+run = "cargo test --locked"
+
+[tasks.build]
+description = "Build the STEM CLI"
+run = "cargo build --locked"
+
+[tasks.dist-plan]
+description = "Preview cargo-dist release artifacts"
+run = "dist plan"
+
+[tasks.dist-generate]
+description = "Generate the cargo-dist release workflow"
+run = "dist generate"
+
+[tasks.example-single]
+description = "Generate a single-step Julia example"
+run = "cargo run --locked -- -i /path/to/system.json -o generated/decision_model.jl --config examples/decision_model.toml --no-prompt --yes"
+
+[tasks.example-sequential]
+description = "Generate a sequential simulation Julia example"
+run = "cargo run --locked -- -o generated/sequential_simulation.jl --config examples/sequential_simulation.toml --no-prompt --yes"

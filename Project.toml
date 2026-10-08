@@ -1,0 +1,5 @@
+[deps]
+HiGHS = "87dc4568-4c63-4d18-b0c0-bb2238e4078b"
+HydroPowerSimulations = "fc1677e0-6ad7-4515-bf3a-bd6bf20a0b1b"
+PowerSimulations = "e690365d-45e2-57bb-ac84-44ba829e73c4"
+PowerSystems = "bcd98974-b02a-5e2f-9ee0-a103f5c450dd"
