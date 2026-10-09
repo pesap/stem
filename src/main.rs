@@ -142,7 +142,7 @@ fn run() -> Result<()> {
     if needs_prompts {
         if template_id == "decision_model" {
             if cli.input.is_none() {
-                prompt_string(&mut config, "system_path", "System JSON path", "")?;
+                prompt_system_path(&mut config, "system_path", "System JSON path")?;
             }
             prompt_simulation_settings(&mut config, &fixed)?;
             prompt_model_formulations(&mut config, &fixed)?;
@@ -443,7 +443,8 @@ fn prompt_catalog_value(
     }
 
     let initial = current.map_or_else(|| choices[0].0.clone(), PromptChoice::Named);
-    let selected = select(title)
+    let prompt_title = format!("{title}\nSearch: type to filter • ↑/↓ move • Enter select");
+    let selected = select(&prompt_title)
         .items(&choices)
         .initial_value(initial)
         .filter_mode()
@@ -501,7 +502,9 @@ fn prompt_multi_selection(title: &str, items: &[(String, String, String)]) -> Re
         format!("Select all {} listed options.", items.len()),
     )];
     choices.extend(item_choices.iter().cloned());
-    let selected = multiselect(title)
+    let prompt_title =
+        format!("{title}\nSearch: type to filter • ↑/↓ move • Space toggle • Enter confirm");
+    let selected = multiselect(&prompt_title)
         .items(&choices)
         .required(false)
         .filter_mode()
@@ -510,7 +513,9 @@ fn prompt_multi_selection(title: &str, items: &[(String, String, String)]) -> Re
         .with_context(|| format!("{title} prompt failed"))?;
     let selected = if selected.contains(&PromptChoice::SelectAll) {
         let title = format!("{title} (all selected; adjust as needed)");
-        multiselect(&title)
+        let prompt_title =
+            format!("{title}\nSearch: type to filter • ↑/↓ move • Space toggle • Enter confirm");
+        multiselect(&prompt_title)
             .items(&item_choices)
             .initial_values(all_prompt_values(items))
             .required(false)
@@ -582,12 +587,11 @@ fn prompt_device_formulations(config: &mut Value, fixed: &FixedPaths) -> Result<
     let model_choices: Vec<_> = components
         .iter()
         .map(|component| {
-            let hint = string_at(config, &format!("formulations.device_models.{component}"))
-                .map_or_else(
-                    || "Optional device class".to_owned(),
-                    |formulation| format!("Current: {formulation}"),
-                );
-            (component.clone(), component.clone(), hint)
+            (
+                component.clone(),
+                component.clone(),
+                device_class_hint(config, component),
+            )
         })
         .collect();
     let selected_components =
@@ -614,6 +618,23 @@ fn prompt_device_formulations(config: &mut Value, fixed: &FixedPaths) -> Result<
         )?;
     }
     Ok(())
+}
+
+fn device_class_hint(config: &Value, component: &str) -> String {
+    let current = string_at(config, &format!("formulations.device_models.{component}"));
+    let available =
+        catalog_entries(config, &format!("formulations.device_options.{component}")).len();
+    let formulation_count = format!(
+        "{available} configured formulation{}",
+        if available == 1 { "" } else { "s" }
+    );
+
+    match (current, available) {
+        (Some(current), 0) => format!("Current: {current}"),
+        (Some(current), _) => format!("Current: {current}; {formulation_count}"),
+        (None, 0) => "No formulation configured; select to enter a custom one".to_owned(),
+        (None, _) => formulation_count,
+    }
 }
 
 fn prompt_fixed_device_options(config: &mut Value, fixed: &FixedPaths) -> Result<()> {
@@ -737,7 +758,13 @@ fn prompt_multi_stage_settings(config: &mut Value, fixed: &FixedPaths) -> Result
             ("resolution", format!("Time resolution for {stage_name}")),
         ] {
             let path = format!("stages.{index}.{field}");
-            prompt_if_not_fixed(config, fixed.contains(&path), &path, &label, "")?;
+            if !fixed.contains(&path) {
+                if field == "system_path" {
+                    prompt_system_path(config, &path, &label)?;
+                } else {
+                    prompt_string(config, &path, &label, "")?;
+                }
+            }
         }
         prompt_network_formulation(
             config,
@@ -792,7 +819,7 @@ fn prompt_stage_models(
             Some((
                 model_index.to_string(),
                 component.to_owned(),
-                format!("Current: {formulation}"),
+                format!("Current formulation: {formulation}"),
             ))
         })
         .collect();
@@ -859,7 +886,7 @@ fn prompt_model_group(
                 (
                     component.clone(),
                     component.clone(),
-                    format!("Current: {formulation}"),
+                    format!("Current formulation: {formulation}"),
                 )
             })
         })
@@ -891,6 +918,75 @@ fn prompt_if_not_fixed(
         prompt_string(config, path, label, fallback)?;
     }
     Ok(())
+}
+
+fn prompt_system_path(config: &mut Value, path: &str, label: &str) -> Result<()> {
+    let current = string_at(config, path).unwrap_or_default();
+    let prompt_label =
+        format!("{label}\nType to filter up to 10 local matches; ↑/↓ choose, Tab complete");
+    let mut prompt = input(&prompt_label).autocomplete(system_json_suggestions);
+    if current.is_empty() {
+        prompt = prompt.placeholder("Path to system JSON");
+    } else {
+        prompt = prompt.default_input(current);
+    }
+    let value: String = prompt
+        .interact()
+        .with_context(|| format!("prompt failed for `{label}`"))?;
+    set_value(config, path, json!(value))
+}
+
+fn system_json_suggestions(query: &str) -> Vec<String> {
+    const MAX_SUGGESTIONS: usize = 10;
+
+    let typed_path = Path::new(query);
+    let has_trailing_separator = query.ends_with(std::path::MAIN_SEPARATOR) || query.ends_with('/');
+    let (directory, partial) = if has_trailing_separator && typed_path.is_dir() {
+        (typed_path, "")
+    } else {
+        (
+            typed_path
+                .parent()
+                .filter(|parent| !parent.as_os_str().is_empty())
+                .unwrap_or_else(|| Path::new(".")),
+            typed_path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or_default(),
+        )
+    };
+    let Ok(entries) = std::fs::read_dir(directory) else {
+        return Vec::new();
+    };
+    let partial = partial.to_lowercase();
+    let mut suggestions = entries
+        .filter_map(|entry| {
+            let entry = entry.ok()?;
+            let name = entry.file_name().into_string().ok()?;
+            if !name.to_lowercase().starts_with(&partial) {
+                return None;
+            }
+
+            let path = entry.path();
+            if path.is_dir() {
+                let mut suggestion = path.into_os_string();
+                suggestion.push(std::path::MAIN_SEPARATOR.to_string());
+                suggestion.into_string().ok()
+            } else if path.is_file()
+                && path
+                    .extension()
+                    .and_then(|extension| extension.to_str())
+                    .is_some_and(|extension| extension.eq_ignore_ascii_case("json"))
+            {
+                Some(path.to_string_lossy().into_owned())
+            } else {
+                None
+            }
+        })
+        .collect::<Vec<_>>();
+    suggestions.sort_unstable();
+    suggestions.truncate(MAX_SUGGESTIONS);
+    suggestions
 }
 
 fn prompt_string(config: &mut Value, path: &str, label: &str, fallback: &str) -> Result<()> {
@@ -1057,13 +1153,16 @@ fn is_cancelled(error: &anyhow::Error) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use std::path::{Path, PathBuf};
+    use std::time::{SystemTime, UNIX_EPOCH};
+
     use clap::Parser;
     use serde_json::json;
     use stem::{default_config, set_value, string_at};
 
     use super::{
-        Cli, PromptChoice, all_prompt_values, apply_cli_values, catalog_entries, device_components,
-        expand_multi_selection, prompts_needed,
+        Cli, PromptChoice, all_prompt_values, apply_cli_values, catalog_entries, device_class_hint,
+        device_components, expand_multi_selection, prompts_needed, system_json_suggestions,
     };
 
     #[test]
@@ -1341,6 +1440,78 @@ mod tests {
     }
 
     #[test]
+    fn system_path_suggestions_include_json_files_and_directories() {
+        let directory = TestDirectory::new();
+        let inputs = directory.path().join("inputs");
+        std::fs::create_dir(&inputs).expect("create nested input directory");
+        std::fs::write(directory.path().join("dispatch.json"), "{}").expect("write JSON file");
+        std::fs::write(directory.path().join("notes.txt"), "text").expect("write text file");
+        std::fs::write(inputs.join("system.json"), "{}").expect("write nested JSON file");
+
+        let query = format!(
+            "{}{separator}",
+            directory.path().display(),
+            separator = std::path::MAIN_SEPARATOR
+        );
+        let suggestions = system_json_suggestions(&query);
+
+        assert_eq!(
+            suggestions,
+            vec![
+                directory
+                    .path()
+                    .join("dispatch.json")
+                    .to_string_lossy()
+                    .into_owned(),
+                format!(
+                    "{}{separator}",
+                    inputs.display(),
+                    separator = std::path::MAIN_SEPARATOR
+                ),
+            ]
+        );
+
+        let nested_query = format!(
+            "{}{separator}sys",
+            inputs.display(),
+            separator = std::path::MAIN_SEPARATOR
+        );
+        assert_eq!(
+            system_json_suggestions(&nested_query),
+            vec![inputs.join("system.json").to_string_lossy().into_owned()]
+        );
+    }
+
+    #[test]
+    fn system_path_suggestions_are_limited_to_ten_matches() {
+        let directory = TestDirectory::new();
+        for index in 0..12 {
+            std::fs::write(
+                directory.path().join(format!("system-{index:02}.json")),
+                "{}",
+            )
+            .expect("write JSON file");
+        }
+        let query = format!(
+            "{}{separator}",
+            directory.path().display(),
+            separator = std::path::MAIN_SEPARATOR
+        );
+
+        assert_eq!(system_json_suggestions(&query).len(), 10);
+    }
+
+    #[test]
+    fn device_class_hints_describe_current_and_available_formulations() {
+        let config = default_config("decision_model").expect("default config");
+
+        let hint = device_class_hint(&config, "ThermalStandard");
+
+        assert!(hint.contains("Current: ThermalStandardUnitCommitment"));
+        assert!(hint.contains("2 configured formulations"));
+    }
+
+    #[test]
     fn supplying_all_selectable_values_skips_the_wizard() {
         let cli = Cli::try_parse_from([
             "stem",
@@ -1382,5 +1553,32 @@ mod tests {
             apply_cli_values(&cli, &mut config, "decision_model").expect("apply explicit choices");
 
         assert!(!prompts_needed(&cli, &config, "decision_model", &fixed));
+    }
+
+    struct TestDirectory(PathBuf);
+
+    impl TestDirectory {
+        fn new() -> Self {
+            let timestamp = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("system clock is after Unix epoch")
+                .as_nanos();
+            let path = std::env::temp_dir().join(format!(
+                "stem-system-path-test-{}-{timestamp}",
+                std::process::id()
+            ));
+            std::fs::create_dir(&path).expect("create test directory");
+            Self(path)
+        }
+
+        fn path(&self) -> &Path {
+            &self.0
+        }
+    }
+
+    impl Drop for TestDirectory {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
     }
 }

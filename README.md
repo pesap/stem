@@ -45,7 +45,7 @@ npx -y pesap/stem -i system.json -o run.jl --config run.toml --no-prompt --yes
 
 Use `--horizon` and `--resolution` for single-step timing, with ISO 8601 fixed durations such as `P2D` and `PT15M`. For sequential runs, set timing per stage in the config.
 
-Use `--solver`, `--network-formulation`, `--device-model`, and `--service-model` to override selections. `--device-attribute`, `--network-option`, `--solver-attribute`, and `--set path=value` set additional options. Solver package and optimizer choices are paired under `[solver.backends]`. `--no-prompt` disables wizard prompts. `--yes` confirms file creation or overwrite.
+Use `--solver`, `--network-formulation`, `--device-model`, and `--service-model` to override selections. `--device-attribute`, `--network-option`, `--solver-attribute`, and `--set path=value` set additional options. Solver package and optimizer choices are paired under `[solver.backends]`. Interactive choices are searchable and show a hint for the active item. System JSON prompts suggest up to 10 matching `.json` files and directories in the typed path; type to filter, then use ↑/↓ and Tab to complete. `--no-prompt` disables wizard prompts. `--yes` confirms file creation or overwrite.
 
 > [!WARNING]
 > Treat configurations as code. Solver and formulation names and configured Julia keyword arguments are emitted into the script. Use remote configurations only from sources you trust.
