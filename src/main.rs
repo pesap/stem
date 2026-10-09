@@ -5,7 +5,10 @@ use std::process::ExitCode;
 
 use anyhow::{Context, Result, bail};
 use clap::Parser;
-use cliclack::{confirm, input, intro, multiselect, note, outro, outro_cancel, select};
+use cliclack::{
+    Theme, ThemeState, confirm, input, intro, multiselect, note, outro, outro_cancel, select,
+    set_theme,
+};
 use serde_json::{Value, json};
 use stem::{
     available_templates, default_config, load_config, render, set_value, solver_backend, string_at,
@@ -70,6 +73,65 @@ struct Cli {
 }
 
 type FixedPaths = HashSet<String>;
+
+struct StemTheme;
+
+impl StemTheme {
+    fn description_block(&self, state: &ThemeState, hint: &str) -> String {
+        let bar = self.bar_color(state).apply_to("│").to_string();
+        let line_prefix = format!("\n{bar}    ");
+        let description = hint.lines().collect::<Vec<_>>().join(&line_prefix);
+        format!("{bar}  Description\n{bar}    {description}\n")
+    }
+
+    fn framed_row(&self, state: &ThemeState, row: &str) -> String {
+        let bar = self.bar_color(state).apply_to("│").to_string();
+        format!("{bar}  {row}\n")
+    }
+}
+
+impl Theme for StemTheme {
+    fn format_select_item(
+        &self,
+        state: &ThemeState,
+        active: bool,
+        label: &str,
+        hint: &str,
+    ) -> String {
+        if matches!(state, ThemeState::Cancel | ThemeState::Submit) && !active {
+            return String::new();
+        }
+
+        let row = self.radio_item(state, active, label, "");
+        let mut rendered = self.framed_row(state, &row);
+        if active && !hint.is_empty() && matches!(state, ThemeState::Active | ThemeState::Error(_))
+        {
+            rendered.push_str(&self.description_block(state, hint));
+        }
+        rendered
+    }
+
+    fn format_multiselect_item(
+        &self,
+        state: &ThemeState,
+        selected: bool,
+        active: bool,
+        label: &str,
+        hint: &str,
+    ) -> String {
+        if matches!(state, ThemeState::Cancel | ThemeState::Submit) && !selected {
+            return String::new();
+        }
+
+        let row = self.checkbox_item(state, selected, active, label, "");
+        let mut rendered = self.framed_row(state, &row);
+        if active && !hint.is_empty() && matches!(state, ThemeState::Active | ThemeState::Error(_))
+        {
+            rendered.push_str(&self.description_block(state, hint));
+        }
+        rendered
+    }
+}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum PromptChoice {
@@ -136,6 +198,7 @@ fn run() -> Result<()> {
         bail!("interactive choices need a terminal; provide the options or use `--no-prompt`");
     }
     if needs_prompts {
+        set_theme(StemTheme);
         intro(" stem ")?;
     }
 
@@ -1161,8 +1224,9 @@ mod tests {
     use stem::{default_config, set_value, string_at};
 
     use super::{
-        Cli, PromptChoice, all_prompt_values, apply_cli_values, catalog_entries, device_class_hint,
-        device_components, expand_multi_selection, prompts_needed, system_json_suggestions,
+        Cli, PromptChoice, StemTheme, Theme, ThemeState, all_prompt_values, apply_cli_values,
+        catalog_entries, device_class_hint, device_components, expand_multi_selection,
+        prompts_needed, system_json_suggestions,
     };
 
     #[test]
@@ -1437,6 +1501,47 @@ mod tests {
                 .iter()
                 .any(|(name, _)| name == "DCPPowerModel")
         );
+    }
+
+    #[test]
+    fn active_choices_render_descriptions_in_a_separate_block() {
+        let select = <StemTheme as Theme>::format_select_item(
+            &StemTheme,
+            &ThemeState::Active,
+            true,
+            "HiGHS",
+            "Open-source linear optimization solver",
+        );
+        let multiselect = <StemTheme as Theme>::format_multiselect_item(
+            &StemTheme,
+            &ThemeState::Active,
+            false,
+            true,
+            "ThermalStandard",
+            "Current formulation: ThermalStandardUnitCommitment",
+        );
+
+        let select_label = select.find("HiGHS").expect("select label");
+        let select_description = select
+            .find("Description\n")
+            .expect("select description block");
+        let select_text = select
+            .find("Open-source linear optimization solver")
+            .expect("select description text");
+        assert!(select[select_label..select_description].contains('\n'));
+        assert!(select_description < select_text);
+
+        let multiselect_label = multiselect
+            .find("ThermalStandard")
+            .expect("multiselect label");
+        let multiselect_description = multiselect
+            .find("Description\n")
+            .expect("multiselect description block");
+        let multiselect_text = multiselect
+            .find("Current formulation: ThermalStandardUnitCommitment")
+            .expect("multiselect description text");
+        assert!(multiselect[multiselect_label..multiselect_description].contains('\n'));
+        assert!(multiselect_description < multiselect_text);
     }
 
     #[test]
