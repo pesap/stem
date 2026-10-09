@@ -16,7 +16,7 @@ function runCli(args: string[]) {
   });
 }
 
-test("prints help and version without loading a config", () => {
+test("prints help and version without loading a config", async () => {
   const help = runCli(["--help"]);
   assert.equal(help.status, 0, help.stderr);
   assert.match(help.stdout, /Usage: stem \[options\]/);
@@ -24,7 +24,10 @@ test("prints help and version without loading a config", () => {
 
   const version = runCli(["--version"]);
   assert.equal(version.status, 0, version.stderr);
-  assert.equal(version.stdout.trim(), "0.1.0");
+  const { version: packageVersion } = JSON.parse(
+    await readFile(join(projectRoot, "package.json"), "utf8"),
+  ) as { version: string };
+  assert.equal(version.stdout.trim(), packageVersion);
 });
 
 test("generates decision and sequential scripts without prompts", async () => {
