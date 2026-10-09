@@ -15,7 +15,7 @@ const STEPS = {{ simulation.steps }}
 const SIMULATION_FOLDER = {{ simulation.output_dir|tojson }}
 const REPORT_PATH = {{ report.path|tojson }}
 const REPORT_VARIABLES = Dict(
-{% for stage in report.variables %}    {{ stage|tojson }} => {{ report.variables[stage]|tojson }},
+{% for stage, variables in report.variables %}    {{ stage|tojson }} => {{ report.variables[stage]|tojson }},
 {% endfor %})
 const STAGE_NAMES = [
 {% for stage in stages %}    {{ stage.name|tojson }},
@@ -50,8 +50,8 @@ end
 
 function main()
     solver = optimizer_with_attributes(
-        {{ selected_solver.optimizer }}{% for key in solver.attributes %},
-        {{ key|tojson }} => {{ solver.attributes[key]|tojson }}{% endfor %},
+        {{ selected_solver.optimizer }}{% for key, attribute_value in selected_solver.attributes|default({}) %},
+        {{ key|tojson }} => {{ selected_solver.attributes[key]|tojson }}{% endfor %},
     )
 {% for stage in stages %}{% set stage_index = loop.index %}    system_{{ stage_index }} = System({{ stage.system_path|tojson }})
     transform_single_time_series!(system_{{ stage_index }}, {{ stage.forecast_horizon }}, {{ stage.forecast_interval }})
@@ -64,7 +64,7 @@ function main()
             {{ device.formulation }};
 {% if device.use_slacks is defined %}            use_slacks = {{ device.use_slacks|tojson }},
 {% endif %}{% if attributes %}            attributes = Dict{String, Any}(
-{% for key in attributes %}                {{ key|tojson }} => {{ attributes[key]|tojson }},
+{% for key, attribute_value in attributes %}                {{ key|tojson }} => {{ attributes[key]|tojson }},
 {% endfor %}            ),
 {% endif %}{% for kwarg in kwargs %}            {{ kwarg }},
 {% endfor %}        ),
@@ -88,7 +88,7 @@ function main()
 {% endfor %}        ],
     )
     feedforwards = Dict(
-{% for model in feedforwards %}        {{ model|tojson }} => [
+{% for model, entries in feedforwards %}        {{ model|tojson }} => [
 {% for entry in feedforwards[model] %}            SemiContinuousFeedforward(;
                 component_type = {{ entry.component_type }},
                 source = {{ entry.source }},

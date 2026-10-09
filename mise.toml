@@ -1,34 +1,61 @@
 [tools]
-cargo-dist = "0.33.0"
+node = "24.21.0"
+
+[tasks.format]
+description = "Format TypeScript source and project configuration"
+run = "npm run format"
 
 [tasks.fmt-check]
-description = "Check Rust formatting"
-run = "cargo fmt --all -- --check"
+description = "Check formatting"
+run = "npm run format:check"
 
-[tasks.clippy]
-description = "Run strict Clippy checks, including pedantic lints"
-run = "cargo clippy --locked --all-targets --all-features -- -W clippy::pedantic -D warnings"
+[tasks.typecheck]
+description = "Type-check source and tests"
+run = "npm run typecheck"
 
 [tasks.test]
-description = "Run STEM tests"
-run = "cargo test --locked"
+description = "Run CLI and rendering tests"
+run = "npm test"
 
 [tasks.build]
-description = "Build the STEM CLI"
-run = "cargo build --locked"
+description = "Build the TypeScript CLI"
+run = "npm run build"
+sources = ["src/**/*.ts", "tsconfig.json", "package.json", "package-lock.json"]
+outputs = ["dist/**/*.js"]
 
-[tasks.dist-plan]
-description = "Preview cargo-dist release artifacts"
-run = "dist plan"
+[tasks.pack-check]
+description = "Inspect the npm package contents"
+run = "npm pack --dry-run"
 
-[tasks.dist-generate]
-description = "Generate the cargo-dist release workflow"
-run = "dist generate"
+[tasks.cli]
+description = "Launch the interactive CLI wizard"
+depends = ["build"]
+interactive = true
+run = "node dist/cli.js"
 
-[tasks.example-single]
+[tasks.example]
+description = "Generate both example Julia scripts"
+depends = ["example:single", "example:sequential"]
+
+[tasks."example:single"]
 description = "Generate a single-step Julia example"
-run = "cargo run --locked -- -i /path/to/system.json -o generated/decision_model.jl --config examples/decision_model.toml --no-prompt --yes"
+depends = ["build"]
+run = """
+node dist/cli.js \
+  --input /path/to/system.json \
+  --output generated/decision_model.jl \
+  --config examples/decision_model.toml \
+  --no-prompt \
+  --yes
+"""
 
-[tasks.example-sequential]
+[tasks."example:sequential"]
 description = "Generate a sequential simulation Julia example"
-run = "cargo run --locked -- -o generated/sequential_simulation.jl --config examples/sequential_simulation.toml --no-prompt --yes"
+depends = ["build"]
+run = """
+node dist/cli.js \
+  --output generated/sequential_simulation.jl \
+  --config examples/sequential_simulation.toml \
+  --no-prompt \
+  --yes
+"""

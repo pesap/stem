@@ -10,12 +10,18 @@ output_dir = "results/day-ahead-real-time"
 
 [solver]
 selected = "HiGHS"
-attributes = { mip_rel_gap = 0.5, log_to_console = false }
 
 [solver.backends.HiGHS]
 package = "HiGHS"
 optimizer = "HiGHS.Optimizer"
 description = "Open-source linear and mixed-integer optimization solver"
+attributes = { mip_rel_gap = 0.5, log_to_console = false }
+
+[solver.backends.Xpress]
+package = "Xpress"
+optimizer = "Xpress.Optimizer"
+description = "Commercial solver that requires an Xpress license"
+attributes = { MIPRELSTOP = 0.5 }
 
 [julia]
 imports = ["HydroPowerSimulations"]

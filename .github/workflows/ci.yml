@@ -5,85 +5,73 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   check:
-    name: Rust checks and CLI smoke test
-    runs-on: ubuntu-latest
+    name: Node ${{ matrix.node-version }} on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        node-version: ["22.12.0", "24"]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - name: Install stable Rust
-        run: |
-          rustup toolchain install stable --profile minimal --component clippy --component rustfmt
-          rustup default stable
-          rustc --version
-          cargo --version
-
-      - name: Check formatting
-        run: cargo fmt --all -- --check
-
-      - name: Run pedantic Clippy
-        run: cargo clippy --locked --all-targets --all-features -- -W clippy::pedantic -D warnings
-
-      - name: Run tests
-        run: cargo test --locked --all-features
-
-      - name: Build CLI
-        run: cargo build --locked
-
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
-          node-version: "22"
+          node-version: ${{ matrix.node-version }}
+          cache: npm
 
-      - name: Check GitHub npx package
-        run: |
-          node --check run-stem.js
-          node --check binary.js
-          node --check binary-install.js
-          node --check install.js
-          npm pack --dry-run
+      - name: Install dependencies
+        run: npm ci
 
-      - name: Smoke-test npx launcher
+      - name: Check formatting
+        run: npm run format:check
+
+      - name: Type-check
+        run: npm run typecheck
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build CLI
+        run: npm run build
+
+      - name: Smoke-test the packed npm package
         shell: bash
         run: |
           set -euo pipefail
-          test_dir="$(mktemp -d "$RUNNER_TEMP/stem-npx.XXXXXX")"
-          tarball="$(npm pack --pack-destination "$test_dir" --silent)"
-          npm install --prefix "$test_dir" --ignore-scripts --no-save "$test_dir/$tarball"
-          package_dir="$test_dir/node_modules/stem"
-          mkdir -p "$package_dir/node_modules/.bin_real"
-          printf '%s\n' '#!/bin/sh' 'printf "ARGS:%s\\n" "$*"' > "$package_dir/node_modules/.bin_real/stem"
-          chmod +x "$package_dir/node_modules/.bin_real/stem"
-          output="$(npm exec --prefix "$test_dir" -- stem --probe forwarded)"
-          test "$output" = "ARGS:--probe forwarded"
-
-      - name: Smoke-test CLI
-        shell: bash
-        run: |
-          set -euo pipefail
-          ./target/debug/stem --help >/dev/null
-          ./target/debug/stem --version
-
-          ./target/debug/stem \
-            --input "$RUNNER_TEMP/system.json" \
-            --output "$RUNNER_TEMP/decision-model.jl" \
-            --config examples/decision_model.toml \
+          test_dir="$(mktemp -d "$RUNNER_TEMP/stem-package.XXXXXX")"
+          mkdir -p "$test_dir/package" "$test_dir/install"
+          tarball="$(npm pack --pack-destination "$test_dir/package" --silent)"
+          npm install --prefix "$test_dir/install" --ignore-scripts --no-save "$test_dir/package/$tarball"
+          stem="$test_dir/install/node_modules/.bin/stem"
+          "$stem" --help > "$test_dir/help.txt"
+          grep -q 'Usage: stem' "$test_dir/help.txt"
+          actual_version="$("$stem" --version)"
+          expected_version="$(node -p "require('./package.json').version")"
+          test "$actual_version" = "$expected_version"
+          printf '%s\n' '{"data":{"components":[]}}' > "$test_dir/system.json"
+          "$stem" \
+            --input "$test_dir/system.json" \
+            --output "$test_dir/decision-model.jl" \
+            --config "$GITHUB_WORKSPACE/examples/decision_model.toml" \
             --no-prompt --yes
-          test -s "$RUNNER_TEMP/decision-model.jl"
-
-          ./target/debug/stem \
-            --output "$RUNNER_TEMP/sequential-simulation.jl" \
-            --config examples/sequential_simulation.toml \
+          test -s "$test_dir/decision-model.jl"
+          "$stem" \
+            --output "$test_dir/sequential-simulation.jl" \
+            --config "$GITHUB_WORKSPACE/examples/sequential_simulation.toml" \
             --no-prompt --yes
-          test -s "$RUNNER_TEMP/sequential-simulation.jl"
+          test -s "$test_dir/sequential-simulation.jl"

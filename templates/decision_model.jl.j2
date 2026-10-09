@@ -39,28 +39,28 @@ end
 function main()
     system = System(SYSTEM_PATH)
     template = ProblemTemplate()
-{% for component in formulations.device_models %}{% set formulation = formulations.device_models[component] %}{% set component_options = device_options[component]|default({}) %}{% set model_options = component_options[formulation]|default({}) %}{% set attributes = model_options.attributes|default({}) %}{% set kwargs = model_options.kwargs|default([]) %}{% if model_options.use_slacks is defined or attributes or kwargs %}    set_device_model!(
+{% for component, formulation in formulations.device_models %}{% set component_options = device_options[component]|default({}) %}{% set model_options = component_options[formulation]|default({}) %}{% set attributes = model_options.attributes|default({}) %}{% set kwargs = model_options.kwargs|default([]) %}{% if model_options.use_slacks is defined or attributes or kwargs %}    set_device_model!(
         template,
         DeviceModel(
             {{ component }},
             {{ formulation }};
 {% if model_options.use_slacks is defined %}            use_slacks = {{ model_options.use_slacks|tojson }},
 {% endif %}{% if attributes %}            attributes = Dict{String, Any}(
-{% for key in attributes %}                {{ key|tojson }} => {{ attributes[key]|tojson }},
+{% for key, attribute_value in attributes %}                {{ key|tojson }} => {{ attributes[key]|tojson }},
 {% endfor %}            ),
 {% endif %}{% for kwarg in kwargs %}            {{ kwarg }},
 {% endfor %}        ),
     )
 {% else %}    set_device_model!(template, {{ component }}, {{ formulation }})
-{% endif %}{% endfor %}{% for component in formulations.service_models %}    set_service_model!(template, {{ component }}, {{ formulations.service_models[component] }})
+{% endif %}{% endfor %}{% for component, formulation in formulations.service_models %}    set_service_model!(template, {{ component }}, {{ formulations.service_models[component] }})
 {% endfor %}    set_network_model!(
         template,
         NetworkModel({{ formulations.network.formulation }}{% if formulations.network.options %}; {{ formulations.network.options|join(", ") }}{% endif %}),
     )
 
     solver = optimizer_with_attributes(
-        {{ selected_solver.optimizer }}{% for key in solver.attributes %},
-        {{ key|tojson }} => {{ solver.attributes[key]|tojson }}{% endfor %},
+        {{ selected_solver.optimizer }}{% for key, attribute_value in selected_solver.attributes|default({}) %},
+        {{ key|tojson }} => {{ selected_solver.attributes[key]|tojson }}{% endfor %},
     )
     problem = DecisionModel(
         template,
