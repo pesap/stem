@@ -1,6 +1,6 @@
 {
   "name": "@pesap/stem",
-  "version": "0.2.0",
+  "version": "0.1.0",
   "description": "Generate Sienna PowerSimulations Julia scripts from configuration files",
   "type": "module",
   "bin": {

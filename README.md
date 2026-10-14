@@ -10,8 +10,14 @@ STEM is a TypeScript CLI for generating Julia simulation scripts for Sienna Powe
 
 You need Node.js 22.12 or newer and npm.
 
+> [!WARNING]
+> I have requested npmjs access to publish under `@pesap`. Until it is
+> available, the commands below install STEM directly from GitHub instead of a
+> published, versioned npm package. They use the repository's default branch,
+> so behavior may change between runs.
+
 ```bash
-npx -y @pesap/stem --help
+npx -y --package=github:pesap/stem stem --help
 ```
 
 ### Generate a script
@@ -19,7 +25,7 @@ npx -y @pesap/stem --help
 Pass a Sienna system JSON and an output path to open the interactive wizard:
 
 ```bash
-npx -y @pesap/stem -i /path/to/system.json -o /tmp/run.jl
+npx -y --package=github:pesap/stem stem -i /path/to/system.json -o /tmp/run.jl
 julia --project=/path/to/julia/environment /tmp/run.jl
 ```
 
@@ -30,7 +36,7 @@ The Julia environment must contain PowerSimulations, the selected formulations, 
 - [Decision-model configuration](examples/decision_model.toml): single-step simulation settings.
 - [Sequential-simulation configuration](examples/sequential_simulation.toml): per-stage systems, horizons, and resolutions. Each stage has its own system path.
 - [Julia templates](templates/): built-in decision-model and sequential-simulation scripts.
-- Run `npx -y @pesap/stem --help` for CLI options and examples.
+- Run `npx -y --package=github:pesap/stem stem --help` for CLI options and examples.
 
 Use a local TOML or JSON config, or an HTTPS URL. CLI flags override configuration values.
 
