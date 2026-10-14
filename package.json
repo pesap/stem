@@ -22,7 +22,7 @@
     "test": "tsx --test test/*.test.ts",
     "format": "prettier --write \"package.json\" \"tsconfig.json\" \"src/**/*.ts\" \"test/**/*.ts\" \".github/workflows/*.yml\"",
     "format:check": "prettier --check \"package.json\" \"tsconfig.json\" \"src/**/*.ts\" \"test/**/*.ts\" \".github/workflows/*.yml\"",
-    "prepack": "npm run build"
+    "prepare": "npm run build"
   },
   "dependencies": {
     "@clack/core": "1.5.1",
