@@ -1,5 +1,5 @@
 {
-  "name": "@pesap/stem",
+  "name": "@gpac/stem",
   "version": "0.1.0",
   "description": "Generate Sienna PowerSimulations Julia scripts from configuration files",
   "type": "module",
@@ -22,7 +22,7 @@
     "test": "tsx --test test/*.test.ts",
     "format": "prettier --write \"package.json\" \"tsconfig.json\" \"src/**/*.ts\" \"test/**/*.ts\" \".github/workflows/*.yml\"",
     "format:check": "prettier --check \"package.json\" \"tsconfig.json\" \"src/**/*.ts\" \"test/**/*.ts\" \".github/workflows/*.yml\"",
-    "prepare": "npm run build"
+    "prepack": "npm run build"
   },
   "dependencies": {
     "@clack/core": "1.5.1",
@@ -36,5 +36,8 @@
     "prettier": "^3.9.9",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2"
+  },
+  "publishConfig": {
+    "registry": "https://npm.github.nrel.gov/"
   }
 }

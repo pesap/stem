@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: Expected release tag, for example v0.2.0
+        description: Expected release tag, for example v0.1.1
         required: true
         type: string
 
@@ -39,46 +39,34 @@ jobs:
           node-version: "24"
           package-manager-cache: false
 
-      - name: Check npm trusted-publishing requirements
-        run: |
-          npm_version="$(npm --version)"
-          echo "Using npm $npm_version"
-          if ! node -e '
-            const version = process.argv[1].split(".").map(Number);
-            const [major, minor, patch] = version;
-            const supported = version.length === 3 && version.every(Number.isInteger) &&
-              (major > 11 || (major === 11 && (minor > 5 || (minor === 5 && patch >= 1))));
-            if (!supported) process.exit(1);
-          ' "$npm_version"; then
-            echo "npm $npm_version is too old for trusted publishing. Use npm 11.5.1 or newer." >&2
-            exit 1
-          fi
-
-      - name: Check package name and release tag
+      - name: Check package name, registry, and release tag
         env:
           RELEASE_TAG: ${{ github.event.release.tag_name || inputs.release_tag }}
         run: |
           set -euo pipefail
           package_name="$(node -p "require('./package.json').name")"
-          package_version="$(node -p "require('./package.json').version")"
-          if [[ "$package_name" != "@pesap/stem" ]]; then
-            echo "Expected npm package @pesap/stem, got $package_name" >&2
+          package_registry="$(node -p "require('./package.json').publishConfig.registry")"
+          if [[ "$package_name" != "@gpac/stem" ]]; then
+            echo "Expected npm package @gpac/stem, got $package_name" >&2
             exit 1
           fi
-          if [[ "$RELEASE_TAG" != "v$package_version" ]]; then
-            echo "Release tag $RELEASE_TAG does not match package version $package_version" >&2
+          if [[ "$package_registry" != "https://npm.github.nrel.gov/" ]]; then
+            echo "Expected internal npm registry, got $package_registry" >&2
+            exit 1
+          fi
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Release tag $RELEASE_TAG is not a vX.Y.Z version tag" >&2
             exit 1
           fi
 
   publish:
-    name: Publish to npm
+    name: Publish to internal npm
     if: github.event_name == 'release'
     needs: [verify, metadata]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
       contents: read
-      id-token: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -87,11 +75,38 @@ jobs:
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: "24"
-          registry-url: "https://registry.npmjs.org"
           package-manager-cache: false
+          registry-url: "https://npm.github.nrel.gov/"
+          scope: "@gpac"
+
+      - name: Check internal registry token
+        env:
+          NREL_NPM_TOKEN: ${{ secrets.NREL_NPM_TOKEN }}
+        run: |
+          if [[ -z "$NREL_NPM_TOKEN" ]]; then
+            echo "Set the NREL_NPM_TOKEN repository Actions secret to a github.nrel.gov package-write token." >&2
+            exit 1
+          fi
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Publish with npm trusted publishing
-        run: npm publish --access public
+      - name: Set version from release tag
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          tag_version="${RELEASE_TAG#v}"
+          npm version "$tag_version" --no-git-tag-version --allow-same-version
+
+      - name: Build package before registry authentication
+        run: npm run build
+
+      - name: Verify internal registry credentials
+        run: npm whoami --registry=https://npm.github.nrel.gov/
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NREL_NPM_TOKEN }}
+
+      - name: Publish package
+        run: npm publish --ignore-scripts --tag latest
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NREL_NPM_TOKEN }}

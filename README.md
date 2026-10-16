@@ -8,25 +8,36 @@ STEM is a TypeScript CLI for generating Julia simulation scripts for Sienna Powe
 
 ### Install
 
-You need Node.js 22.12 or newer and npm.
+You need Node.js 22.12 or newer, npm, GitHub CLI (`gh`), and NLR VPN access.
 
-> [!WARNING]
-> I have requested npmjs access to publish under `@pesap`. Until it is
-> available, these commands install a pinned GitHub commit instead of a
-> published npm package. Pinning the commit avoids npm reusing the earlier
-> failed cache entry. `--allow-git=all` permits Git dependency fetching for
-> this invocation. Update the SHA to use a newer commit.
+1. Authenticate to GitHub Enterprise and grant package-read access:
 
-```bash
-npx --allow-git=all -y --package=github:pesap/stem#dcd36a60b75b96aa6c19b83e2e0c35e2fea2adcb stem --help
-```
+   ```bash
+   GH_HOST=github.nrel.gov gh auth login
+   GH_HOST=github.nrel.gov gh auth refresh -h github.nrel.gov -s read:packages
+   ```
+
+2. Configure npm for the internal `@gpac` scope and store the token in your user-level npm config:
+
+   ```bash
+   npm config set --location=user @gpac:registry https://npm.github.nrel.gov/
+   npm config set --location=user //npm.github.nrel.gov/:_authToken \
+     "$(GH_HOST=github.nrel.gov gh auth token)"
+   ```
+
+3. Verify access and run STEM:
+
+   ```bash
+   npm whoami --registry=https://npm.github.nrel.gov/
+   npx -y @gpac/stem --help
+   ```
 
 ### Generate a script
 
 Pass a Sienna system JSON and an output path to open the interactive wizard:
 
 ```bash
-npx --allow-git=all -y --package=github:pesap/stem#dcd36a60b75b96aa6c19b83e2e0c35e2fea2adcb stem -i /path/to/system.json -o /tmp/run.jl
+npx -y @gpac/stem -i /path/to/system.json -o /tmp/run.jl
 julia --project=/path/to/julia/environment /tmp/run.jl
 ```
 
@@ -37,9 +48,15 @@ The Julia environment must contain PowerSimulations, the selected formulations, 
 - [Decision-model configuration](examples/decision_model.toml): single-step simulation settings.
 - [Sequential-simulation configuration](examples/sequential_simulation.toml): per-stage systems, horizons, and resolutions. Each stage has its own system path.
 - [Julia templates](templates/): built-in decision-model and sequential-simulation scripts.
-- Run `npx --allow-git=all -y --package=github:pesap/stem#dcd36a60b75b96aa6c19b83e2e0c35e2fea2adcb stem --help` for CLI options and examples.
+- Run `npx -y @gpac/stem --help` for CLI options and examples.
 
 Use a local TOML or JSON config, or an HTTPS URL. CLI flags override configuration values.
+
+## Publishing
+
+Publish a GitHub release with a new `vX.Y.Z` tag. The workflow takes the package version from the tag and publishes to the internal npm registry, so no version bump is needed in the repository.
+
+Add a `NREL_NPM_TOKEN` repository Actions secret containing a `github.nrel.gov` token with `read:packages` and `write:packages` access. The GitHub.com `GITHUB_TOKEN` cannot authenticate to the separate enterprise registry.
 
 ## Development
 
